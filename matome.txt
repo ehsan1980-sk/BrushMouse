@@ -1,0 +1,139 @@
+# websocket 
+websocket参考
+https://www.mgo-tec.com/blog-entry-websocket-wroom03.html
+
+
+## 過去
+https://github.com/moritanian/ShogiRecognition/tree/develop/wroom
+wifi-client はtcp通信
+この上の階層として、http とかwebsocketがあるイメージ？
+
+- 以下の二つはブラウザ上（webクライアント）でのリアルタイム通信形式？
+websocket は双方向
+SSE はサーバからクライアントのみ
+
+tcp サーバからクライアント -> 過去例はこれのこと サーバ側はwebサーバではなくTCPサーバ!!!
+要はsocket通信している。 ＊websocektではない
+http://skomo.o.oo7.jp/f49/hp49_15.htm
+http://qiita.com/t-mochizuki/items/ede5902669b0efc8f9c2 <- 要参考(nodejs TCPサーバ)
+
+- UDPでやるのは?
+http://4009.jp/post/2016-04-25-esp-wroom-02/
+
+
+以下のようにsocket.io使ってwroomとsocket通信できるよう
+http://qiita.com/ie4/items/ae850cdb2c617f3fd6af
+
+### websocket について
+http通信を利用してwebsocketの通信を確立する。(upgrade)
+通信相手識別のためにhttpを利用する以外は生のsocket通信？
+
+# optimouse 
+http://arms22.blog91.fc2.com/blog-entry-565.html
+
+http://www.pixart.com.tw/upload/PAN3101_V10_20051121170653.pdf
+http://www.pixart.com.tw/upload/PAW3205DB-TJ3T_DS_S_V1.0_20130514113310.pdf
+
+- reverse engeneer page
+https://turntablecontrol.wordpress.com/2014/12/21/reverse-engineering-an-optical-mouse/
+
+
+wroom02 wroom32 比較 
+https://blogs.yahoo.co.jp/bokunimowakaru/55623259.html
+
+# mouse そのまま利用する場合
+SetCursorPos
+http://d.hatena.ne.jp/s-kita/20100711/1278800332
+
+## nodejsからwin
+- node-ffi使う？
+- win32api(npm)
+https://www.npmjs.com/package/win32api
+
+
+# androino構想
+計算およびwifi通信はandroidが、ioのみarduinoで
+androidとarduinoはusbで接続(uart)
+usbホストケーブルが必要?
+
+## 利点
+電源をandroidからとれる
+コンパイル不要で開発できるフレームワーク
+フロントエンドの知識で構築できる
+
+
+react-native-usb-serial-anroid
+https://github.com/mapaiva/react-native-usbserial
+
+ユーザはjs+htmlで記述
+react native使う？
+
+uart binaryつかいたい(serial.write)
+ログをconsole.logに
+
+## 第一段階
+- リアルタイムなio制御
+- pwm
+- AD
+
+## 第二段階
+- タイマー割り込み処理の事前登録
+- i2c等各ペリフェラル操作
+
+## デモ案
+スワイプによって変わるクリスマスツリー
+
+
+//^--------------------------------------///
+# nodeに関して
+参考
+http://qiita.com/ij_spitz/items/2c66d501f29bff3830f7
+## http
+favico.ico を取得するため二回アクセスされている
+
+## 設計案
+urlパースで役割（スマホ側、wroom側）を分ける。
+room名で識別すればいけそう
+
+
+
+#マウス
+## イメージセンサ
+PAW3205DB
+http://www.pixart.com.tw/upload/PAW3205DB-TJ3T_DS_S_V1.0_20130514113310.pdf
+PAN3101
+http://www.pixart.com.tw/upload/PAN3101_V10_20051121170653.pdf
+
+optimouse
+http://arms22.blog91.fc2.com/blog-entry-565.html
+https://github.com/zapmaker/OptiMouse
+
+## bluetooth側
+「mouse hacker」
+イメージセンサ入力をコントローラで置き換え
+コントローラにwifi通信させればスマホから操作できる!!
+スマホで音声認識使う
+「gmailにログインして」とか
+「履歴消去して」
+
+# wroom arduno ide 復習
+arduino.cc のほう(上)
+スケッチは document/arduino/censor_device 以下にあった
+- 前回のブランチ
+https://github.com/moritanian/ShogiRecognition/tree/develop/wroom
+
+## todo
+wroom側の非同期処理が必要？
+過去ソースではclient.available() がtrueになるまでまっている
+前にresetかかっていたのは long polling と関係ある？
+
+- socket通信の参考!!
+https://www.mgo-tec.com/blog-entry-websocket-wroom03.html
+
+- Arduino core for ESP8266 WiFi chip
+https://github.com/esp8266/Arduino
+
+
+# 当日注意点
+- wimaxもっていく！！(APのプログラム修正しないといけない)
+- スマホは画面ロックすること
