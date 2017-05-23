@@ -45,12 +45,22 @@ const long FCY = 80000000L;
  *   [ControlLEDCmd]
  *   01[led]
  *   led : 1byte
+ *   
+ *   [OpticalCmd]
+ *   20[spX][spY][X][Y][deltaSpeedY]
+ *   spX: 2byte
+ *   spY: 2byte
+ *   X: 4byte
+ *   Y: 4byte
+ *   deltaSpeedY : 2byte
  */
 const unsigned char ControlMotorCmd = 0x10;
 const unsigned char ControlLEDCmd = 0x12;
 const unsigned char OpticalCmd = 0x20;
 
 const unsigned char LedOnStatus = 0x11;
+
+int correctPId1 = 0x31;
 
 int cnt1 = 0;
 WiFiClient client;
@@ -64,15 +74,17 @@ const uint8_t OptiRegDy = 0x04; // 0x04
 const uint8_t OptiRegMotion = 0x02;
 const uint8_t OptiRegProd1 =0x00;
 
-signed long optiX;
-signed long optiY;
+int32_t optiX;
+int32_t optiY;
 signed char optiProd1;
 signed char optiMotion;
 
- signed int optiSpX;
- signed int optiSpY;
+ int16_t optiSpX;
+ int16_t optiSpY;
 
- const unsigned char optiSpCof = 800; // 1000分率
+ int16_t deltaSpeedY;
+
+ const unsigned int optiSpCof = 800; // 1000分率
  const int optiSpDif = 1000;
 
 uint8_t OptiReadRegister(uint8_t address)
@@ -167,8 +179,8 @@ signed char OptiIsMotion(){
 
 void OptiBegin(void)
 {
-  optiX = 0L;
-  optiY = 0L;
+  optiX = 0;
+  optiY = 0;
   optiSpX = 0;
   optiSpY = 0;
   
@@ -182,7 +194,6 @@ void OptiBegin(void)
 }
 
 void OptiSetup(){
-  int correctPId1 = 0x31;
   int cnt = 0, PId1;
   pinMode (OptiClkPin, OUTPUT);
   pinMode (OptiDataPin, INPUT);
@@ -226,12 +237,33 @@ void OptiSetup(){
     
 }
 
+void OptiReconnect(){
+  int PId1, cnt = 0;
+  updateLED(1);
+  while(1){
+    OptiBegin();
+    PId1 = OptiProductId1();
+    if( PId1 == correctPId1){
+      break;
+    }
+    cnt++;
+    if(cnt % 10 == 0){
+     //cnt = 0;
+      Serial.print("Id = : ");
+      Serial.println(PId1 ,DEC);
+    }
+    if(cnt == 100)
+      break;
+    delay(1);
+  }
+  updateLED(0);  
+}
+
 void OptiUpdate(){
   signed char dx, dy;
-  //optiProd1 = OptiProductId1();
+  optiProd1 = OptiProductId1();
   
- //if(optiProd1 == 49 && OptiIsMotion() == 1)
- if(OptiIsMotion() == 1)
+ if(optiProd1 == correctPId1 && OptiIsMotion() == 1)
  {
     dx = OptiDx();
     dy = OptiDy();
@@ -241,6 +273,15 @@ void OptiUpdate(){
   }else{
     dx = 0;
     dy = 0;
+    if(optiProd1 != correctPId1 ){
+      optiProd1 = OptiProductId1();
+      if(optiProd1 != correctPId1)
+      {
+        Serial.print("reconnect id1 = ");
+        Serial.print(optiProd1, DEC);
+        OptiReconnect();
+      }
+    }
   }
   // 平滑化速度算出  TODO サイクル間隔を考慮
   /*
@@ -306,17 +347,28 @@ void updateMotors(int right, int left){
  */
 void updateMotorsStraight(int forward){  
   int maxVal = 1023;
-  int lowerLimit = 400;
-  int feedP = 10;
+  int lowerLimit = 0;//測定のため0から
+  int feedP = 20;
+  int deltaSpeed;
   
+  const int maxSpeed = 40; // 要調整
+  
+    /*
+  int right =  forward + optiSpX * feedP /100;
+  int left = forward - optiSpX * feedP / 100;
+  */
+  int requiredSpeed = forward * maxSpeed / maxVal;
+  deltaSpeed = requiredSpeed - optiSpX;
+  forward += deltaSpeed * feedP;
+
   if(forward > maxVal)
     forward = maxVal;
   else if(maxVal < lowerLimit)
     forward = 0;
-    
-  int right =  forward + optiSpX * feedP /100;
-  int left = forward - optiSpX * feedP / 100;
-  updateMotors(right, left); 
+  
+ // updateMotors(right, left); 
+   updateMotors(forward, forward); 
+   deltaSpeedY = (int16_t) deltaSpeed;
 }
 
 void updateLED(int stat){
@@ -326,8 +378,36 @@ void updateLED(int stat){
     digitalWrite(LEDPin, LOW);
 }
 
-void sendRequest(String line){
+void sendMsg(String line){
   client.print(line);//データを送信
+}
+
+void sendLines(uint8_t* line, char len){
+  //while(!client.available()){}
+  client.write((const uint8_t *)line, len);//データを送信
+}
+
+void sendOpticalData(){
+  uint8_t writeLine[15];
+  writeLine[0] = ( uint8_t)OpticalCmd;
+  writeLine[1] = ( uint8_t)((((unsigned int16_t) optiSpX) & 0xff00) >> 8);
+  writeLine[2] = ( uint8_t)(((unsigned int16_t) optiSpX) & 0x00ff);
+  writeLine[3] = ( uint8_t)((((unsigned int16_t) optiSpY) & 0xff00) >> 8);
+  writeLine[4] = ( uint8_t)(((unsigned int16_t) optiSpY) & 0x00ff);
+
+  writeLine[5] = ( uint8_t)((((unsigned int32_t) optiX) & 0xff000000) >> 24);
+  writeLine[6] = ( uint8_t)((((unsigned int32_t) optiX) & 0x00ff0000) >> 16);
+  writeLine[7] = ( uint8_t)((((unsigned int32_t) optiX) & 0x0000ff00) >> 8);
+  writeLine[8] = ( uint8_t)(((unsigned int32_t) optiX) & 0x000000ff);
+
+  writeLine[9] = ( uint8_t)((((unsigned int32_t) optiY) & 0xff000000) >> 24);
+  writeLine[10] = ( uint8_t)((((unsigned int32_t) optiY) & 0x00ff0000) >> 16);
+  writeLine[11] = ( uint8_t)((((unsigned int32_t) optiY) & 0x0000ff00) >> 8);
+  writeLine[12] = ( uint8_t)(((unsigned int32_t) optiY) & 0x000000ff);
+
+  writeLine[13] = ( uint8_t) ((deltaSpeedY &0xff00) >> 8);
+  writeLine[14] = ( uint8_t) (deltaSpeedY & 0x00ff); 
+  sendLines(writeLine, 15);
 }
 
 int getRequest(){
@@ -543,6 +623,7 @@ void loop() {  // FIXME wdtが作動しないように
     Serial.print(optiSpY, DEC);
     
     Serial.println(); // for \n
+    sendOpticalData();
    
    }
 }

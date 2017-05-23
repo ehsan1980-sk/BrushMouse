@@ -51,39 +51,6 @@ http://d.hatena.ne.jp/s-kita/20100711/1278800332
 https://www.npmjs.com/package/win32api
 
 
-# androino構想
-計算およびwifi通信はandroidが、ioのみarduinoで
-androidとarduinoはusbで接続(uart)
-usbホストケーブルが必要?
-
-## 利点
-電源をandroidからとれる
-コンパイル不要で開発できるフレームワーク
-フロントエンドの知識で構築できる
-
-
-react-native-usb-serial-anroid
-https://github.com/mapaiva/react-native-usbserial
-
-ユーザはjs+htmlで記述
-react native使う？
-
-uart binaryつかいたい(serial.write)
-ログをconsole.logに
-
-## 第一段階
-- リアルタイムなio制御
-- pwm
-- AD
-
-## 第二段階
-- タイマー割り込み処理の事前登録
-- i2c等各ペリフェラル操作
-
-## デモ案
-スワイプによって変わるクリスマスツリー
-
-
 //^--------------------------------------///
 # nodeに関して
 参考

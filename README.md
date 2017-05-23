@@ -17,3 +17,10 @@ Acess [server's IP adress]:8000
 ## BrushMouse
 - Optical censor is PAW3205DB ( http://www.pixart.com.tw/upload/PAW3205DB-TJ3T_DS_S_V1.0_20130514113310.pdf )
 
+## Server
+
+```
+node server.js
+```
+
+And access [your ip adress]:8000 on your web browser.

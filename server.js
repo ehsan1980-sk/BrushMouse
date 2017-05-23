@@ -28,19 +28,19 @@ console.log('Listening Start on webSOcket Server - ' + "192.168.179.3" + ':' + 8
 // webソケット
 io.sockets.on('connection', function(socket) {
 	// callback はnodejs 側で実行される!!
+  /*
 	socket.emit('greeting', {message: 'hello'}, function (data) {  
 		console.log('webclient connected: ' + data);
 	});
-	//socket.broadcast.emit("addMember", {id:1});
+  */
+  console.log("conected http client");
 	socket.on('message', function(data) {
-		console.log(data);
 		var len = data.length;
 		var buffer = new Buffer(len + 1);
-		console.log("len = " + len);
 		for(var index = 0; index < len; index++)
 		{
 			buffer.writeUInt8(data[index], index);
-			console.log(data[index]);
+			//console.log(data[index]);
 		}
 		buffer.writeUInt8(0, len);
 		
@@ -60,14 +60,11 @@ var net_server = net.createServer();
 net_server.maxConnections = 3;
 
 function sendAllHttpClient(d){
-	// TODO これは使えないみたい
-	server.clients.forEach(function(client) {
-      client.send(data);
-    });
+	io.sockets.emit("message", d);
 }
 
 function sendAllNetClient(d){
-    console.log("writeData: " + d[0] + ":" + d[1] + ":" + d[2]);
+    //console.log("writeData: " + d[0] + ":" + d[1] + ":" + d[2]);
 
 	for(var i in clients){
 		clients[i].writeData(d);
@@ -104,7 +101,7 @@ net_server.on('connection', function(socket) {
   var data = '';
   var newline = /\r\n|\n/;
   socket.on('data', function(chunk) {
-    var k = chunk.toString();
+    //var k = chunk.toString();
     /*
     if (newline.test(k)) {
       k = chomp(k);
@@ -112,7 +109,17 @@ net_server.on('connection', function(socket) {
       k ='';
     }
     */
-    sendAllHttpClient(k);
+    console.log("data from wroom:");
+    let dataArr = [];
+    for(let index in chunk)
+    {
+      console.log(chunk[index]);
+      if(index < 15)
+        dataArr.push(chunk[index]);
+      else
+        break;
+    }
+    sendAllHttpClient(dataArr);
   });
 
   // エラーキャッチ

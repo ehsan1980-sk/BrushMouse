@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <title>Socket.IO Test</title>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.0/jquery.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style type="text/css">
+
+    #start-button {
+      width: 400px;
+      height: 100px;
+      right: 0;
+      left: 0;
+      top:0;
+      bottom: 0;
+      margin: auto;
+      position: absolute;
+      font-size: 55px;
+      z-index: 20;
+
+    }
+    #led-button{
+      background-color: #ffffff;
+      width: 200px;
+      height: 60px;
+      font-size: 25px;    
+      margin-left: 10px;  
+    }
+
+    #move-mode-button {
+      width: 200px;
+      height: 60px;
+      font-size: 25px;
+      background-color: #84faa0;
+      float: right;
+      margin-right: 10px;
+    }
+
+    #led-button.active {
+      background-color: #e14a4a;
+    }
+
+    .title {
+      text-align: center;
+    }
+
+    .speed-circle {
+      position: relative;
+      width: 300px;
+      height: 300px;
+      background-color: #ddddff;
+      
+      border: medium solid #7c717c;
+
+      border-radius: 150px;
+      right: 0;
+      left: 0;
+      margin: auto;
+    }
+
+    .center-point {
+      position: absolute;
+      right: 0;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      margin: auto;
+      width: 6px;
+      height: 6px;
+      background-color: red;
+      border-radius: 3px;
+    }
+
+    .speed-point {
+      position: absolute;
+      top: 80px;
+      left: 90px;
+      width: 16px;
+      height: 16px;
+      background-color: #147c03;
+      border-radius: 8px;
+    }
+
+    #pointer-pos {
+      width: 500px;
+      height: 60px;
+      background-color: #676728;
+      font-size: 20px;
+    }
+
+    #pos-x{
+      width: 250px;
+      height: 60px;
+      color: white;
+      float: left;
+      text-align: center;
+      line-height: 60px;
+    }
+
+    #pos-y{
+      width: 250px;
+      height: 60px;
+      color: white;
+      float:right;
+      text-align: center;
+      line-height: 60px;
+    }
+
+
+      
+    </style>
+
+
+    <script>
+    /*
+      TODO 動き調整
+      ダイブ傾けないといけない
+    */
+      $(function() {
+
+        const ControlMotorCmd = 0x10;
+        const ControlLEDCmd = 0x12;
+        const OpticalCmd = 0x20;
+
+        const ledOnStatus = 0x11;
+        const ledOffStatus = 0x10;
+
+        let hasConected = false;
+        var socket = io.connect();
+
+        const moveModes = {
+          straight: 1,
+          xy: 2
+        };
+        let moveMode = moveModes.straight;
+
+        $("#start-button").click(function(){
+          $(this).hide();
+          setFullScreen();
+          compassFunc();
+
+        });
+
+        socket.on('connect', function(evt) {
+          console.log("socket connected");
+          hasConected = true;
+        });
+        /*
+        socket.on('greeting', function(data, fn) {
+          console.log("socket connected")
+          fn(1);
+        });
+        */
+        socket.on("message", function(data){
+          console.log(data);
+          if(data.length > 0){
+            switch(data[0]){
+              case 0x20: // optical data
+                if(data.length != 15)
+                  return;
+                let dx = (data[1]<< 8) | data[2];
+                let dy = (data[3]<< 8) | data[4];
+                let posX = (data[5]<< 24) | (data[6] << 16) | (data[7] << 8) | data[8];
+                let posY = (data[9]<< 24) | (data[10] << 16) | (data[11] << 8) | data[12];
+                let deltaSpeedY = (data[13]<<8) | data[14];
+
+
+                dx = dx.getSignedFromUnsigned(2);
+                dy = dy.getSignedFromUnsigned(2);
+                posX = posX.getSignedFromUnsigned(4);
+                posY = posY.getSignedFromUnsigned(4);
+                deltaSpeedY = deltaSpeedY.getSignedFromUnsigned(2);
+                console.log("dx : " + dx);
+                console.log("dy : " + dy);
+                console.log("posX: " + posX);
+                console.log("posY : " + posY);
+                console.log("deltaSpeedY : " + deltaSpeedY);
+            }
+          }
+        });
+
+        // unsigned xx を signed に変換
+        Number.prototype.getSignedFromUnsigned = function(byteLen)
+        {
+          if(this < 0)
+            return this;
+          if((this >> (byteLen*8 - 1) ) == 0)
+            return this;
+          return this - (1 << byteLen*8) ;
+          //return ((-1 >> byteLen*8) << byteLen*8) | this;
+        }
+
+        /* 数値型拡張 */
+        Number.prototype.floatFormat = function(n)
+        {
+          let _pow = Math.pow(10, n);
+          return Math.round (this * _pow)/_pow; 
+        }
+
+        function sendSocketData(dataArray){
+          if(!hasConected)
+            return;
+          /*
+          let len = dataArray.length;
+          let buffer = new ArrayBuffer(len+1); // null 終端のため+1
+          ///let buffer = new Buffer(len + 1);
+          let aryU8 = new Uint8Array(buffer);
+          for(let index = 0; index++; index<len)
+            //buffer.writeUInt8(dataArray[index], index);
+            aryU8[index] = dataArray[index];
+          
+          aryU8[len] = 0;
+          */
+          socket.emit('message',dataArray);
+
+        }
+
+         // Compass
+        let hasCompass = false; // 
+        let compassdir = {};
+        let compass_as_zero_limit = 1e-10;
+        let hasCompassInput = false;
+        let sendCount = 0;
+
+        // デバイスの傾き
+        $( window ).on( "deviceorientation", function(e){
+          //console.log("deviceorientation");
+          var evenet = e.originalEvent;
+
+          hasCompass = evenet.absolute;
+          if(hasCompass){
+            if(event.webkitCompassHeading) {
+              // Apple works only with this, alpha doesn't work
+              compassdir = event.webkitCompassHeading;  
+            }
+            else
+            { 
+              var k = 3.1415 * 2/360.0;
+              compassdir.x = event.gamma * k;//event.alpha * k + 1.5
+              compassdir.y = event.beta * k;
+              compassdir.z = 0.0;//event.gamma * k;
+              // 値が小さい時は水平とする
+              if(Math.abs(compassdir.x) < compass_as_zero_limit){
+                compassdir.x = 0.0;
+              }
+              if(Math.abs(compassdir.y) < compass_as_zero_limit){
+                compassdir.y = 0.0;
+              }
+            }
+            hasCompassInput = true;
+          }
+
+        });
+
+        $("#led-button").click(function(){
+          let ledStatus = false;
+          if($(this).hasClass("active")){
+            $(this).removeClass("active");
+            ledStatus = false;
+          }else{
+            $(this).addClass("active");
+            ledStatus = true;
+          }
+          sendSocketData([ControlLEDCmd, ledStatus ? ledOnStatus : ledOffStatus]);
+
+        });
+
+        $("#move-mode-button").click(function(){
+          if(moveMode == moveModes.straight){
+            moveMode = moveModes.xy;
+            $(this).text("xy");
+          }else {
+            moveMode = moveModes.straight;
+            $(this).text("まっすぐ")
+          }
+        });
+
+        let $speedPoint = $(".speed-point");
+        let circleSize = $(".speed-circle").width();
+
+        let $posXText = $("#pos-x");
+        let $posYText = $("#pos-y");
+
+        function compassFunc(){
+          if(!hasCompassInput)
+          {
+            setTimeout(compassFunc, 50);
+            return;
+          
+          }
+          const maxLimit = 255; // 0xff
+          const ForwardCof = 2.5;
+          const VerticalCof = 0.8;
+          let _forward = ( compassdir.x + Math.PI/6.0) * ForwardCof;
+          //console.log("_forward " + _forward);
+
+          let right, left;
+          if(moveMode == moveModes.straight){
+            right = _forward;
+            left = _forward;
+          }else{
+            right = _forward * (1.0 + compassdir.y * VerticalCof);
+            left = _forward * (1.0 - compassdir.y * VerticalCof);   
+          }
+
+          let pointSize = 16;
+          $speedPoint.css("left", (circleSize/2 + circleSize/2* (right - left) - pointSize/2) + "px");
+          $speedPoint.css("top", (circleSize/2 - circleSize/8* (right + left) - pointSize/2) + "px");  
+          
+          left *= maxLimit;
+          right *= maxLimit;
+
+          left = parseInt(left);
+          right = parseInt(right);
+
+          if(right < 1)
+            right = 1;
+          else if(right > maxLimit)
+            right = maxLimit;
+          
+          if(left <1)
+            left = 1;
+          else if(left>maxLimit)
+            left = maxLimit;
+
+          //console.log("right = " + right);
+          //console.log("left = " + left);
+
+          sendCount++;
+          if(sendCount > 0){
+            sendSocketData([ControlMotorCmd, right, left]);  
+            sendCount = 0;
+          }
+          hasCompassInput = false;
+          //$posYText.text(`Y: ${_forward.floatFormat(4)}`);
+          //$posXText.text(`X: ${compassdir.y.floatFormat(4)}`);
+          $posYText.text(`Y: ${right}`);
+          $posXText.text(`X: ${left}`);
+          setTimeout(compassFunc, 50);
+        };
+
+        /* screen 系*/
+        function setFullScreen(startFunc, endFunc, failedFunc, lockMode = "landscape"){
+          var nop = function(){};
+
+          startFunc = startFunc || nop;
+          endFunc  = endFunc || nop;
+          failedFunc =  failedFunc || nop;
+          
+          document.body.requestFullscreen  = document.body.requestFullscreen 
+            || document.body.mozRequestFullScreen
+            || document.body.webkitRequestFullScreen 
+            || document.body.webkitRequestFullscreen 
+            || document.body.msRequestFullscreen;
+
+          let fullScreenChangeList = [
+                        "fullscreenchange",
+                        "mozfullscreenchange",
+                        "webkitfullscreenchange",
+                        "MSFullscreenchange"
+                        ];
+
+          document.fullscreenEnabled =   document.fullscreenEnabled
+            || document.mozFullScreenEnabled
+            || document.webkitFullscreenEnabled
+            || document.msFullscreenEnabled;
+
+          console.log(document.fullscreenEnabled);
+
+          let fullScreenErrorList =  ["fullscreenerror",
+                        "webkitfullscreenerror",
+                        "mozfullscreenerror",
+                        "MSFullscreenError"]
+
+          //console.log(fullScreenFunc);
+          //  console.log(fullScreenError);
+
+          document.body.requestFullscreen();
+          for(let index in fullScreenChangeList){
+            document.addEventListener(fullScreenChangeList[index], function( event ) {
+              console.log(document.fullscreenEnabled);
+              if(document.fullscreenEnabled)
+              {
+                console.log("fullscreen enable");
+                if(lockMode)
+                  lockOrientation(lockMode);
+                startFunc();
+              }
+              else
+                endFunc();
+
+          });
+
+          document.addEventListener(fullScreenErrorList[index], function(event){
+            failedFunc();
+          });
+        }
+      }
+
+      function lockOrientation(mode) {
+        console.log("lockOrientation");
+        if (screen.orientation.lock) {
+          screen.orientation.lock(mode).catch(function(e) {
+            console.log(e);
+          });
+        }else if (screen.lockOrientation) {
+            screen.lockOrientation(mode).catch(function(e) {
+            console.log(e);
+          });
+        }else if (screen.webkitLockOrientation) {
+          screen.webkitLockOrientation(mode).catch(function(e) {
+            console.log(e);
+          });
+        }else if (screen.mozLockOrientation) {
+          screen.mozLockOrientation(mode).catch(function(e) {
+            console.log(e);
+          });
+        }else if (screen.msLockOrientation) {
+          screen.msLockOrientation(mode).catch(function(e) {
+            console.log(e);
+          });
+        }
+      }
+    });
+    </script>
+  </head>
+  <body>
+    <h1 class="title">Socket.IO Test</h1>
+    <button id="start-button"> start </button>
+    <button id="led-button"> LED </button>
+    <button id="move-mode-button"> まっすぐ </button>
+    <div id="pointer-pos">
+      <div id="pos-x"></div>
+      <div id="pos-y"></div>
+    </div>
+    <div class="speed-circle">
+      <div class="center-point"></div>
+      <div class="speed-point"></div>
+    </div>
+  </body>
+</html>
