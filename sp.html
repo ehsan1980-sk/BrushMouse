@@ -6,6 +6,9 @@
     <script src="/socket.io/socket.io.js"></script>
     <style type="text/css">
 
+    body {
+      background-color: black;
+    }
     #start-button {
       width: 400px;
       height: 100px;
@@ -20,24 +23,30 @@
 
     }
     #led-button{
-      background-color: #ffffff;
       width: 200px;
       height: 60px;
-      font-size: 25px;    
-      margin-left: 10px;  
+      font-size: 25px;
+      margin-left: 10px;
+      background: -webkit-gradient(linear, left top, left bottom, from(rgba(75, 103, 112, 0)), color-stop(0.05,#80CCE6), color-stop(0.05,#06759a), color-stop(0.95,#1b1c1d), color-stop(0.95,rgba(128, 130, 131, 0.98)), to(rgba(0, 41, 61, 0.01)));
+      color: #bfbfbf;
+      text-shadow: 1px 1px 1px #121212;
     }
 
     #move-mode-button {
       width: 200px;
       height: 60px;
       font-size: 25px;
-      background-color: #84faa0;
       float: right;
       margin-right: 10px;
+      color: white;
+      background: -webkit-gradient(linear, left top, left bottom, from(rgba(75, 103, 112, 0)), color-stop(0.05,#80CCE6), color-stop(0.05,#60e2c4), color-stop(0.95,#0c694d), color-stop(0.95,rgba(128, 130, 131, 0.98)), to(rgba(0, 41, 61, 0.01)));
+      text-shadow: 1px 1px 1px #121212;
     }
 
     #led-button.active {
-      background-color: #e14a4a;
+      background: -webkit-gradient(linear, left top, left bottom, from(rgba(75, 103, 112, 0)), color-stop(0.05,#bcbd48), color-stop(0.05,#c9cc00), color-stop(0.95,#484401), color-stop(0.95,rgba(128, 130, 131, 0.98)), to(rgba(0, 41, 61, 0.01)));
+      box-shadow: inset 2px 2px 2px #1c1d17;
+      color: #fdf9f3;
     }
 
     .title {
@@ -48,14 +57,14 @@
       position: relative;
       width: 300px;
       height: 300px;
-      background-color: #ddddff;
-      
+      background-color: #3ebbf3;
       border: medium solid #7c717c;
-
       border-radius: 150px;
       right: 0;
       left: 0;
       margin: auto;
+      box-shadow: 0px 2px 7px 2px #1db1af;
+      background: -webkit-gradient(linear, left top, left bottom, from(rgba(75, 103, 112, 0)), color-stop(0.05,#7cc5de), color-stop(0.05,#91b4bf), color-stop(0.95,#010202), color-stop(0.95,rgba(128, 130, 131, 0.98)), to(rgba(0, 41, 61, 0.01)));
     }
 
     .center-point {
@@ -67,8 +76,9 @@
       margin: auto;
       width: 6px;
       height: 6px;
-      background-color: red;
+      background-color: #351f24;
       border-radius: 3px;
+      box-shadow: 1px 1px 2px #121212;
     }
 
     .speed-point {
@@ -77,15 +87,21 @@
       left: 90px;
       width: 16px;
       height: 16px;
-      background-color: #147c03;
+      background-color: #12398c;
       border-radius: 8px;
+      box-shadow: 1px 1px 2px 1px #023544;
+      background: -webkit-gradient(linear, left top, left bottom, from(rgba(75, 103, 112, 0)), color-stop(0.05,#4d8a9e), color-stop(0.05,#3696da), color-stop(0.95,#069), color-stop(0.95,rgba(9, 44, 62, 0.98)), to(rgba(0, 41, 61, 0.01)));
     }
 
     #pointer-pos {
       width: 500px;
       height: 60px;
-      background-color: #676728;
+      background-color: #035b6d;
       font-size: 20px;
+      margin: 5px;
+      border-radius: 30px;
+      box-shadow: 1px 1px 6px 1px #13586b;
+      background: -webkit-gradient(linear, left top, left bottom, from(rgba(75, 103, 112, 0)), color-stop(0.05,#80CCE6), color-stop(0.05,#5ba7bf), color-stop(0.95,#0b1e5a), color-stop(0.95,rgba(128, 130, 131, 0.98)), to(rgba(0, 41, 61, 0.01)));
     }
 
     #pos-x{
@@ -95,15 +111,26 @@
       float: left;
       text-align: center;
       line-height: 60px;
+      background-color: rgba(39, 93, 29, 0.26);
     }
 
     #pos-y{
       width: 250px;
       height: 60px;
       color: white;
-      float:right;
+      float: right;
       text-align: center;
       line-height: 60px;
+      background-color: rgba(18, 18, 18, 0.24);
+    }
+
+    #speed-bars {
+      color: white;
+    }
+
+    .speed-bar {
+      width: 90%;
+      margin: 20px;
     }
 
 
@@ -128,18 +155,69 @@
         let hasConected = false;
         var socket = io.connect();
 
+         // Compass
+        let hasCompass = false; // 
+        let compassdir = {};
+        let compass_as_zero_limit = 1e-10;
+        let hasCompassInput = false;
+        let sendCount = 0;
+
+
         const moveModes = {
           straight: 1,
           xy: 2
         };
         let moveMode = moveModes.straight;
 
-        $("#start-button").click(function(){
-          $(this).hide();
-          setFullScreen();
-          compassFunc();
+        var $startButton = $("#start-button");
+        var $speedCircle = $(".speed-circle");
 
-        });
+        var $speedBars = $("#speed-bars");
+        var $pointerPos = $("#pointer-pos");
+
+        if(isPC()){
+          $speedBars.show();
+          let $speedRightBar = $("#speed-right-bar");
+          let $speedLeftBar = $("#speed-left-bar");
+          let $speedRightBarVal = $("#speed-right-bar-val");
+          let $speedLeftBarVal = $("#speed-left-bar-val");
+          $("#speed-right-bar").on("change", function(){changeBarFunc(1)});
+          $("#speed-left-bar").on("change", function(){changeBarFunc(-1)});
+
+          function changeBarFunc(bar){
+
+            let right = $speedRightBar.val();
+            let left = $speedLeftBar.val();
+             if(moveMode == moveModes.straight){
+              if(bar == 1){
+                left = right;
+                $speedLeftBar.val(left);
+              }else{
+                right = left;
+                $speedRightBar.val(right);             
+              }
+            }
+            $speedRightBarVal.text(right);
+            $speedLeftBarVal.text(left);
+            sendSocketData([ControlMotorCmd, right, left]);  
+          }
+        
+        }else{
+          $pointerPos.show();
+          $startButton.show();
+          $startButton.click(function(){
+            setFullScreen(function(){
+              $startButton.hide();
+              $speedCircle.show();
+            }, 
+            function(){
+              $startButton.show();
+              $speedCircle.hide();
+            });
+            compassFunc();
+          });     
+        }
+       
 
         socket.on('connect', function(evt) {
           console.log("socket connected");
@@ -215,13 +293,7 @@
 
         }
 
-         // Compass
-        let hasCompass = false; // 
-        let compassdir = {};
-        let compass_as_zero_limit = 1e-10;
-        let hasCompassInput = false;
-        let sendCount = 0;
-
+        
         // デバイスの傾き
         $( window ).on( "deviceorientation", function(e){
           //console.log("deviceorientation");
@@ -340,6 +412,7 @@
         };
 
         /* screen 系*/
+        let hasSetScreenListener = false;
         function setFullScreen(startFunc, endFunc, failedFunc, lockMode = "landscape"){
           var nop = function(){};
 
@@ -365,7 +438,14 @@
             || document.webkitFullscreenEnabled
             || document.msFullscreenEnabled;
 
-          console.log(document.fullscreenEnabled);
+          function isFullScreen(){
+            return document.fullscreenElement 
+            || document.webkitFullscreenElement
+            || document.mozFullScreenElement
+            || document.msFullscreenElement;
+          };
+            
+
 
           let fullScreenErrorList =  ["fullscreenerror",
                         "webkitfullscreenerror",
@@ -376,24 +456,33 @@
           //  console.log(fullScreenError);
 
           document.body.requestFullscreen();
-          for(let index in fullScreenChangeList){
-            document.addEventListener(fullScreenChangeList[index], function( event ) {
-              console.log(document.fullscreenEnabled);
-              if(document.fullscreenEnabled)
-              {
-                console.log("fullscreen enable");
-                if(lockMode)
-                  lockOrientation(lockMode);
-                startFunc();
-              }
-              else
-                endFunc();
+          if(!hasSetScreenListener)
+          {
+            for(let index in fullScreenChangeList){
+              document.addEventListener(fullScreenChangeList[index], function( event ) {
+                if(document.fullscreenEnabled)
+                {
+                  console.log("fullscreen enable");
+                  if(isFullScreen())
+                  {
+                    if(lockMode)
+                      lockOrientation(lockMode);
+                    startFunc();
+                  }else{
+                    endFunc();
+                  }
+                }
+                else{
+                  console.log("not enabled full screen");
+                }
 
-          });
+            });
 
-          document.addEventListener(fullScreenErrorList[index], function(event){
-            failedFunc();
-          });
+            document.addEventListener(fullScreenErrorList[index], function(event){
+              failedFunc();
+            });
+          }
+          hasSetScreenListener = true;
         }
       }
 
@@ -421,19 +510,37 @@
           });
         }
       }
+
+      function isPC(){
+        let isPc = true;
+        if ((navigator.userAgent.indexOf('iPhone') > 0 && navigator.userAgent.indexOf('iPad') == -1) || navigator.userAgent.indexOf('iPod') > 0 || navigator.userAgent.indexOf('Android') > 0) {
+          isPc = false;
+        }
+        return isPc;
+      }
+
     });
     </script>
   </head>
   <body>
     <h1 class="title">Socket.IO Test</h1>
-    <button id="start-button"> start </button>
+    <button id="start-button" style="display: none;"> start </button>
     <button id="led-button"> LED </button>
     <button id="move-mode-button"> まっすぐ </button>
-    <div id="pointer-pos">
-      <div id="pos-x"></div>
-      <div id="pos-y"></div>
+    <div id="pointer-pos" style="display: none;">
+      <div id="pos-x">x: 255</div>
+      <div id="pos-y">y: 255</div>
     </div>
-    <div class="speed-circle">
+    <div id="speed-bars" style="display: none;">
+      right: 
+        <span id="speed-right-bar-val">1</span>
+        <input type="range" name="example" id="speed-right-bar" class="speed-bar" min="1" max="255" value="0">
+      left:
+        <span id="speed-left-bar-val">1</span> 
+        <input type="range" name="example" id="speed-left-bar" class="speed-bar" min="1" max="255" value="0">
+    </div>
+    
+    <div class="speed-circle" style="display: none;">
       <div class="center-point"></div>
       <div class="speed-point"></div>
     </div>

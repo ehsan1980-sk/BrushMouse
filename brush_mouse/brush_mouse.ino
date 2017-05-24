@@ -87,6 +87,8 @@ signed char optiMotion;
  const unsigned int optiSpCof = 800; // 1000分率
  const int optiSpDif = 1000;
 
+ char isOptiConnected = 0;
+
 uint8_t OptiReadRegister(uint8_t address)
 {
   int i = 7;
@@ -202,6 +204,7 @@ void OptiSetup(){
   OptiBegin();
   PId1 = OptiProductId1();
   if( PId1 == correctPId1){
+    isOptiConnected = 1;
     break;
   }
   cnt++;
@@ -252,8 +255,11 @@ void OptiReconnect(){
       Serial.print("Id = : ");
       Serial.println(PId1 ,DEC);
     }
-    if(cnt == 100)
+    if(cnt == 10)
+    {
+      isOptiConnected = 0;
       break;
+    }
     delay(1);
   }
   updateLED(0);  
@@ -273,18 +279,19 @@ void OptiUpdate(){
   }else{
     dx = 0;
     dy = 0;
-    if(optiProd1 != correctPId1 ){
+      
+    if(isOptiConnected == 1 && optiProd1 != correctPId1 ){
       optiProd1 = OptiProductId1();
       if(optiProd1 != correctPId1)
       {
         Serial.print("reconnect id1 = ");
-        Serial.print(optiProd1, DEC);
+        Serial.println(optiProd1, DEC);
         OptiReconnect();
       }
     }
   }
   // 平滑化速度算出  TODO サイクル間隔を考慮
-  /*
+  
   optiSpX *= optiSpCof;
   optiSpX += (optiSpDif - optiSpCof) * dx;
   optiSpX /= optiSpDif;
@@ -292,10 +299,11 @@ void OptiUpdate(){
   optiSpY *= optiSpCof;
   optiSpY += (optiSpDif - optiSpCof) * dy;
   optiSpY /= optiSpDif;
-    */
-
+    
+/*
   optiSpX = dx;
   optiSpY = dy;
+*/
 }
 
 
@@ -348,8 +356,10 @@ void updateMotors(int right, int left){
 void updateMotorsStraight(int forward){  
   int maxVal = 1023;
   int lowerLimit = 0;//測定のため0から
-  int feedP = 20;
+  int feedP = 100;
+  int feedI = 0;
   int deltaSpeed;
+  static int deltaPos = 0;
   
   const int maxSpeed = 40; // 要調整
   
@@ -357,18 +367,22 @@ void updateMotorsStraight(int forward){
   int right =  forward + optiSpX * feedP /100;
   int left = forward - optiSpX * feedP / 100;
   */
-  int requiredSpeed = forward * maxSpeed / maxVal;
+  int requiredSpeed = forward * maxSpeed / maxVal; // maxSpeedに対する値
   deltaSpeed = requiredSpeed - optiSpX;
-  forward += deltaSpeed * feedP;
+  if(isOptiConnected == 0)
+    deltaSpeed = 0;
+    
+  deltaPos += deltaSpeed;
+  forward += deltaSpeed * feedP + deltaPos * feedI / 100;
 
   if(forward > maxVal)
     forward = maxVal;
-  else if(maxVal < lowerLimit)
+  else if(forward < lowerLimit)
     forward = 0;
   
  // updateMotors(right, left); 
-   updateMotors(forward, forward); 
-   deltaSpeedY = (int16_t) deltaSpeed;
+  updateMotors(forward, forward); 
+  deltaSpeedY = (int16_t) deltaSpeed;
 }
 
 void updateLED(int stat){
@@ -445,7 +459,7 @@ int getRequest(){
         return -1;
       right = (int) (readLine[1] << 2);
       left = (int) (readLine[2] << 2);
-      if(right == left)
+      if(right == left && right != (1<<2))
         updateMotorsStraight(right);
       else
         updateMotors(right, left);
@@ -599,7 +613,7 @@ void loop() {  // FIXME wdtが作動しないように
   
   //  センサinput(真っすぐモード以外の活用法は？)
    OptiUpdate();
-   //gupdateMotorsStraight();
+   //updateMotorsStraight();
    
    if(client.available())
     getRequest();
@@ -608,6 +622,7 @@ void loop() {  // FIXME wdtが作動しないように
    cnt1++;
    if(cnt1 > 30){
     cnt1 = 0;
+    /*
     Serial.print("id1=");
     Serial.print(optiProd1, DEC);
     Serial.print(" motion=");
@@ -623,6 +638,7 @@ void loop() {  // FIXME wdtが作動しないように
     Serial.print(optiSpY, DEC);
     
     Serial.println(); // for \n
+    */
     sendOpticalData();
    
    }
